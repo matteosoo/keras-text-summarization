@@ -1,5 +1,0 @@
-In this file, you can upload with your own data(especially for proper noun) to get the appropriate tokenizations(jieba package for zh-chinese language).
-For example:
-變形金剛
-哈利波利
-玩命關頭
