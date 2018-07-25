@@ -6,13 +6,17 @@ from keras.layers.recurrent import LSTM
 from keras.preprocessing.sequence import pad_sequences
 from keras.callbacks import ModelCheckpoint
 from keras_text_summarization.library.utility.glove_loader import load_glove, GLOVE_EMBEDDING_SIZE
+from keras.layers import Concatenate
 import numpy as np
 import os
+import jieba
+from keras.layers import Bidirectional
 
 HIDDEN_UNITS = 100
 DEFAULT_BATCH_SIZE = 64
 VERBOSE = 1
 DEFAULT_EPOCHS = 10
+jieba.load_userdict('./userdict.txt')#匯入自己的字典
 
 
 class Seq2SeqSummarizer(object):
@@ -37,12 +41,16 @@ class Seq2SeqSummarizer(object):
         encoder_inputs = Input(shape=(None,), name='encoder_inputs')
         encoder_embedding = Embedding(input_dim=self.num_input_tokens, output_dim=HIDDEN_UNITS,
                                       input_length=self.max_input_seq_length, name='encoder_embedding')
-        encoder_lstm = LSTM(units=HIDDEN_UNITS, return_state=True, name='encoder_lstm')
-        encoder_outputs, encoder_state_h, encoder_state_c = encoder_lstm(encoder_embedding(encoder_inputs))
-        encoder_states = [encoder_state_h, encoder_state_c]
+        encoder_lstm = Bidirectional(LSTM(units=HIDDEN_UNITS, return_state=True, name='encoder_lstm'))#
+        encoder_outputs, forward_h, forward_c, backward_h, backward_c = encoder_lstm(encoder_embedding(encoder_inputs))#
+
+        state_h = Concatenate()([forward_h, backward_h])#
+        state_c = Concatenate()([forward_c, backward_c])#
+        encoder_states = [state_h, state_c]
 
         decoder_inputs = Input(shape=(None, self.num_target_tokens), name='decoder_inputs')
-        decoder_lstm = LSTM(units=HIDDEN_UNITS, return_state=True, return_sequences=True, name='decoder_lstm')
+        decoder_lstm = LSTM(units=HIDDEN_UNITS*2, return_state=True, return_sequences=True, name='decoder_lstm')#
+        # decoder_lstm = LSTM(units=HIDDEN_UNITS, return_state=True, return_sequences=True, name='decoder_lstm')#.
         decoder_outputs, decoder_state_h, decoder_state_c = decoder_lstm(decoder_inputs,
                                                                          initial_state=encoder_states)
         decoder_dense = Dense(units=self.num_target_tokens, activation='softmax', name='decoder_dense')
@@ -56,7 +64,8 @@ class Seq2SeqSummarizer(object):
 
         self.encoder_model = Model(encoder_inputs, encoder_states)
 
-        decoder_state_inputs = [Input(shape=(HIDDEN_UNITS,)), Input(shape=(HIDDEN_UNITS,))]
+        decoder_state_inputs = [Input(shape=(HIDDEN_UNITS*2,)), Input(shape=(HIDDEN_UNITS*2,))]#
+        # decoder_state_inputs = [Input(shape=(HIDDEN_UNITS,)), Input(shape=(HIDDEN_UNITS,))]#.
         decoder_outputs, state_h, state_c = decoder_lstm(decoder_inputs, initial_state=decoder_state_inputs)
         decoder_states = [state_h, state_c]
         decoder_outputs = decoder_dense(decoder_outputs)
@@ -66,11 +75,45 @@ class Seq2SeqSummarizer(object):
         if os.path.exists(weight_file_path):
             self.model.load_weights(weight_file_path)
 
+    # def transform_input_text(self, texts):
+    #     temp = []
+    #     for line in texts:
+    #         x = []
+    #         for word in line.lower().split(' '):
+    #             wid = 1
+    #             if word in self.input_word2idx:
+    #                 wid = self.input_word2idx[word]
+    #             x.append(wid)
+    #             if len(x) >= self.max_input_seq_length:
+    #                 break
+    #         temp.append(x)
+    #     temp = pad_sequences(temp, maxlen=self.max_input_seq_length)
+
+    #     print(temp.shape)
+    #     return temp
+
+    # def transform_target_encoding(self, texts):
+    #     temp = []
+    #     for line in texts:
+    #         x = []
+    #         line2 = 'START ' + line.lower() + ' END'
+    #         for word in line2.split(' '):
+    #             x.append(word)
+    #             if len(x) >= self.max_target_seq_length:
+    #                 break
+    #         temp.append(x)
+
+    #     temp = np.array(temp)
+    #     print(temp.shape)
+    #     return temp
+
     def transform_input_text(self, texts):
         temp = []
         for line in texts:
             x = []
-            for word in line.lower().split(' '):
+            text  = jieba.cut(line,cut_all = False)
+            for word in jieba.cut(line,cut_all = False):
+                text = list(text)
                 wid = 1
                 if word in self.input_word2idx:
                     wid = self.input_word2idx[word]
@@ -87,8 +130,10 @@ class Seq2SeqSummarizer(object):
         temp = []
         for line in texts:
             x = []
-            line2 = 'START ' + line.lower() + ' END'
-            for word in line2.split(' '):
+            text = jieba.cut(line,cut_all=False)
+            # line2 = 'START ' + line.lower() + ' END'
+            for word in jieba.cut(line,cut_all=False):
+                text = list(text)
                 x.append(word)
                 if len(x) >= self.max_target_seq_length:
                     break
@@ -97,6 +142,8 @@ class Seq2SeqSummarizer(object):
         temp = np.array(temp)
         print(temp.shape)
         return temp
+
+
 
     def generate_batch(self, x_samples, y_samples, batch_size):
         num_batches = len(x_samples) // batch_size
@@ -142,8 +189,8 @@ class Seq2SeqSummarizer(object):
         self.config['version'] = self.version
         config_file_path = Seq2SeqSummarizer.get_config_file_path(model_dir_path)
         weight_file_path = Seq2SeqSummarizer.get_weight_file_path(model_dir_path)
-        checkpoint = ModelCheckpoint(weight_file_path)
-        np.save(config_file_path, self.config)
+        checkpoint = ModelCheckpoint(weight_file_path) # 每間隔一個checkpoint
+        np.save(config_file_path, self.config) # 即儲存一次
         architecture_file_path = Seq2SeqSummarizer.get_architecture_file_path(model_dir_path)
         open(architecture_file_path, 'w').write(self.model.to_json())
 
@@ -169,13 +216,22 @@ class Seq2SeqSummarizer(object):
     def summarize(self, input_text):
         input_seq = []
         input_wids = []
-        for word in input_text.lower().split(' '):
+        # print(input_text)
+        text = jieba.cut(input_text,cut_all = False)# 
+        text = list(text)
+        for word in range(len(text)):
             idx = 1  # default [UNK]
             if word in self.input_word2idx:
                 idx = self.input_word2idx[word]
             input_wids.append(idx)
+        # for word in input_text.lower().split(' '):
+        #     idx = 1  # default [UNK]
+        #     if word in self.input_word2idx:
+        #         idx = self.input_word2idx[word]
+        #     input_wids.append(idx)
         input_seq.append(input_wids)
         input_seq = pad_sequences(input_seq, self.max_input_seq_length)
+        # print(input_seq)
         states_value = self.encoder_model.predict(input_seq)
         target_seq = np.zeros((1, 1, self.num_target_tokens))
         target_seq[0, 0, self.target_word2idx['START']] = 1
@@ -199,7 +255,7 @@ class Seq2SeqSummarizer(object):
             target_seq[0, 0, sample_token_idx] = 1
 
             states_value = [h, c]
-        return target_text.strip()
+        return target_text.strip() # 用于移除字符串头尾指定的字符（默认为空格或换行符）或字符序列。
 
 
 class Seq2SeqGloVeSummarizer(object):

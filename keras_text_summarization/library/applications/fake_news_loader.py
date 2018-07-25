@@ -1,4 +1,5 @@
 from collections import Counter
+import jieba
 
 MAX_INPUT_SEQ_LENGTH = 500
 MAX_TARGET_SEQ_LENGTH = 50
@@ -7,28 +8,48 @@ MAX_TARGET_VOCAB_SIZE = 2000
 
 
 def fit_text(X, Y, input_seq_max_length=None, target_seq_max_length=None):
+    jieba.load_userdict('./userdict.txt')#匯入自己的字典
     if input_seq_max_length is None:
         input_seq_max_length = MAX_INPUT_SEQ_LENGTH
     if target_seq_max_length is None:
         target_seq_max_length = MAX_TARGET_SEQ_LENGTH
     input_counter = Counter()
     target_counter = Counter()
+
     max_input_seq_length = 0
     max_target_seq_length = 0
 
     for line in X:
-        text = [word.lower() for word in line.split(' ')]
+        text = jieba.cut(line,cut_all= False)
+        text = list(text)
         seq_length = len(text)
         if seq_length > input_seq_max_length:
             text = text[0:input_seq_max_length]
             seq_length = len(text)
         for word in text:
-            input_counter[word] += 1
+            input_counter[word] +=1
         max_input_seq_length = max(max_input_seq_length, seq_length)
 
+
+    # for line in X:
+    #     text = [word.lower() for word in line.split(' ')]
+    #     seq_length = len(text)
+    #     if seq_length > input_seq_max_length:
+    #         text = text[0:input_seq_max_length]
+    #         seq_length = len(text)
+    #     for word in text:
+    #         input_counter[word] += 1
+    #     max_input_seq_length = max(max_input_seq_length, seq_length)
+
+
     for line in Y:
-        line2 = 'START ' + line.lower() + ' END'
-        text = [word for word in line2.split(' ')]
+        # line2 = 'START ' + line.lower() + ' END'
+        line2 = 'START ' + line + ' END'
+        print('line:',line)
+        print('line2',line2)
+        text = jieba.cut(line2,cut_all= False)
+        text = list(text)
+        # text = [word for word in line2.split(' ')]
         seq_length = len(text)
         if seq_length > target_seq_max_length:
             text = text[0:target_seq_max_length]
