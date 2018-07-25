@@ -11,7 +11,7 @@ def main():
     model_dir_path = './models'
 
     print('loading csv file ...')
-    df = pd.read_csv(data_dir_path + "/fake_or_real_news.csv")
+    df = pd.read_csv(data_dir_path + "/論文前201.csv")
     X = df['text']
     Y = df.title
 
@@ -19,6 +19,7 @@ def main():
 
     summarizer = Seq2SeqSummarizer(config)
     summarizer.load_weights(weight_file_path=Seq2SeqSummarizer.get_weight_file_path(model_dir_path=model_dir_path))
+    # weight應是載入參數
 
     print('start predicting ...')
     for i in np.random.permutation(np.arange(len(X)))[0:20]:
