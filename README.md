@@ -1,4 +1,4 @@
-# keras-text-summarization
+# keras-text-summarization for zh-chinese
 
 Text summarization using seq2seq and encoder-decoder recurrent networks in Keras
 
@@ -122,7 +122,7 @@ data_dir_path = './data' # refers to the demo/data folder
 model_dir_path = './models' # refers to the demo/models folder
 
 print('loading csv file ...')
-df = pd.read_csv(data_dir_path + "/fake_or_real_news.csv")
+df = pd.read_csv(data_dir_path + "/chinese_data.csv")
 X = df['text']
 Y = df.title
 
