@@ -20,7 +20,7 @@ def main():
     model_dir_path = './models'
 
     print('loading csv file ...')
-    df = pd.read_csv(data_dir_path + "/論文前201.csv")
+    df = pd.read_csv(data_dir_path + "/chinese_data.csv")
 
     print('extract configuration from input texts ...')
     Y = df.title
